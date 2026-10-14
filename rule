@@ -1,0 +1,15 @@
+1. Define near-duplicate edge (i, j) where:
+     (pHash_Hamming(i, j) <= 8) OR (cosine_similarity(i, j) >= T)
+
+2. IF any pair (i, j) exists such that i in train and j in (val ∪ test):
+     a. Build undirected graph G = (V, E) where:
+          V = all 10,000 samples
+          E = {Sample.group equivalence edges} ∪ {near-duplicate edges}
+     b. Compute connected components of G as new cluster groups.
+     c. Run StratifiedGroupKFold(n_splits=10, shuffle=True, random_state=0) over new components.
+     d. Write new assignments to `splits.v2.json`.
+     e. Keep `splits.json` on disk unchanged.
+     f. Re-run `probe.py` using `--splits splits.v2.json`.
+     g. Record sha256(splits.v2.json) in result metadata.
+   ELSE:
+     Retain `splits.json` as the active partition.

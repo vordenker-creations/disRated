@@ -1,8 +1,8 @@
 # disRated
 
-> **Current Status (v0.1.0 — Active Research Prototype):** This package is an experimental evaluation harness under active development (currently at **Phase 2 of 4**), published early to reserve the `disrated` package name.
-> * **Implemented & Verified:** Dataset ingestion (`VHD11K`), perceptual-hash and feature-space deduplication (`splits.v2.json`), crash-resumable `.jsonl` evaluation runners, dummy/NudeNet baselines, Tier 0 CLIP linear probes (`0.882` test ROC-AUC), and one-knob selective routing sweeps.
-> * **Not Yet Implemented:** Tier 2 Vision-Language Model (VLM) escalation adapters, spatial region-of-interest (ROI) cropping, and a unified top-level `disrated` CLI binary (commands currently run via `python -m disrated.<module>`). Do not use this in production.
+> **Current Status (v0.1.1 — Active Research Prototype):** This package is an experimental evaluation harness under active development (currently at **Phase 3 of 4**), accompanying a VKU research benchmark study on selective visual moderation.
+> * **Implemented & Verified:** Top-level `disrated` CLI, dataset ingestion (`VHD11K`), perceptual-hash and feature-space deduplication (`splits.v2.json`), crash-resumable `.jsonl` evaluation runners, dummy/NudeNet baselines, Tier 0 CLIP linear probes (`0.882` test ROC-AUC), one-knob selective routing sweeps, Apple Silicon Tier 2 VLM adapter (`d1-2b-mlx`), and Phase 3 validation gate (`disrated val-gate`).
+> * **In Progress / Not Yet Implemented:** Additional Tier 2 VLM adapters (generative CoT / CUDA server backbones) and Phase 4 held-out `test` cascade evaluation (`splits.v2.json["test"]` remains sealed for Tier 2). Do not use this in production.
 > 
 > 
 
@@ -17,8 +17,8 @@ Built around the **VHD11K** multimodal harm benchmark, `disRated` tests whether 
 | Phase | Milestone | Status | Key Deliverables |
 | --- | --- | --- | --- |
 | **Phase 1** | **Harness, Split Hygiene & Tier 0 Baseline** | **Done** | Leak-remediated `splits.v2.json` (8,449 isolated components), SHA-256 provenance gates, NudeNet floor (`0.518` AUC), CLIP ViT-B/16 probe (`0.882` test AUC). |
-| **Phase 2** | **Offline Risk–Coverage & Protocol Lock** | **Done** | Single-knob ` |
-| **Phase 3** | **Tier 2 VLM Integration & Val Gate** | **Next** | Zero-shot VLM adapter, validation in-band superiority gate (`val` uncertain slice), locking threshold cutoff `c*`. |
+| **Phase 2** | **Offline Risk–Coverage & Protocol Lock** | **Done** | Single-knob `\|logit(p)\| < c` routing sweeps, bootstrap CIs, pre-registered [`HYPOTHESIS.md`](HYPOTHESIS.md). |
+| **Phase 3** | **Tier 2 VLM Integration & Val Gate** | **In Progress** | `LiquidAI/d1-2B-MLX-fp16` System-1 adapter, Platt calibration & in-band superiority gate (`disrated val-gate`). |
 | **Phase 4** | **4-Arm Held-Out Evaluation** | **Planned** | Paired bootstrap comparison across `probe-only`, `vlm-only`, `cascade`, and `random-control` on `test`. |
 
 ---
@@ -41,7 +41,7 @@ pip install disrated
 
 ```
 
-For local development and full benchmark reproduction using [`uv`](https://www.google.com/search?q=https://github.com/astral-sh/uv):
+For local development and full benchmark reproduction using [`uv`](https://github.com/astral-sh/uv):
 
 ```bash
 git clone https://github.com/vordenker/disrated.git
@@ -60,20 +60,19 @@ Run deterministic baselines or off-the-shelf detectors over a split. Runs are au
 
 ```bash
 # Deterministic pixel-hash random baseline
-uv run python -m disrated.evalrun \
+uv run disrated evalrun \
   --model random \
   --dataset /path/to/dataset_10000_1000 \
   --splits splits.v2.json \
-  --split test
+  --split val
 
 # NudeNet anatomical detector floor baseline
-uv run python -m disrated.evalrun \
+uv run disrated evalrun \
   --model nudenet \
   --dataset /path/to/dataset_10000_1000 \
   --splits splits.v2.json \
   --split all \
   --batch-size 16
-
 ```
 
 ### 2. Score Predictions
@@ -81,12 +80,11 @@ uv run python -m disrated.evalrun \
 Compute binary classification metrics, ROC-AUC, Average Precision, coverage, and per-source (`concept` vs. `sdxl`) or per-concept breakdowns:
 
 ```bash
-uv run python -m disrated.score results/nudenet-all.jsonl \
+uv run disrated score results/nudenet-all.jsonl \
   --dataset /path/to/dataset_10000_1000 \
   --splits splits.v2.json \
   --split all \
   --concepts
-
 ```
 
 ### 3. Extract Embeddings & Fit Tier 0 Probe
@@ -95,27 +93,33 @@ Cache unit-normalised `openai/clip-vit-base-patch16` embeddings and fit the L2-r
 
 ```bash
 # Extract and cache 512-d image features
-uv run python -m disrated.embed \
+uv run disrated embed \
   --model openai/clip-vit-base-patch16 \
   --dataset /path/to/dataset_10000_1000 \
   --batch-size 32
 
 # Tune regularization on val, write val/test/OOF prediction stores
-uv run python -m disrated.probe \
+uv run disrated probe \
   --embeddings embeddings/openai_clip-vit-base-patch16.npz \
   --dataset /path/to/dataset_10000_1000 \
   --splits splits.v2.json \
   --name clip-b16-v2
-
 ```
 
-### 4. Risk–Coverage & Routing Analysis
+### 4. Risk–Coverage, Tier 2 Validation Gate & Routing Analysis
 
-Evaluate single-knob logit uncertainty routing (`|logit(p)| < c`) with 2,000-sample non-parametric bootstrap confidence intervals:
+Evaluate single-knob logit uncertainty routing (`|logit(p)| < c`) and run the Phase 3 validation gate (`val` only):
 
 ```bash
-uv run python -m disrated.risk_coverage
+uv run disrated risk-coverage \
+  --dataset /path/to/dataset_10000_1000 \
+  --splits splits.v2.json
 
+uv run disrated val-gate \
+  --dataset /path/to/dataset_10000_1000 \
+  --splits splits.v2.json \
+  --probe results/clip-b16-v2-val.jsonl \
+  --vlm results/d1-2b-mlx-v2-val.jsonl
 ```
 
 ### 5. Dataset Integrity & Leakage Audits
@@ -123,10 +127,9 @@ uv run python -m disrated.risk_coverage
 Re-run the perceptual hash, feature proximity, and connected-component split generators:
 
 ```bash
-uv run python -m disrated.audit_hashes --dataset /path/to/dataset_10000_1000 --splits splits.v2.json
-uv run python -m disrated.audit_clip --dataset /path/to/dataset_10000_1000 --splits splits.v2.json
-uv run python -m disrated.rebuild_splits --dataset /path/to/dataset_10000_1000 --out splits.v2.json
-
+uv run disrated audit-hashes --dataset /path/to/dataset_10000_1000 --splits splits.v2.json
+uv run disrated audit-clip --dataset /path/to/dataset_10000_1000 --splits splits.v2.json
+uv run disrated rebuild-splits --dataset /path/to/dataset_10000_1000 --out splits.v2.json
 ```
 
 ---
@@ -162,15 +165,30 @@ Escalating the `k%` of validation samples closest to the decision boundary (`|lo
 
 ---
 
+## Benchmark Scope & Adapting Beyond VHD11K
+
+`disRated` `v0.1.x` is intentionally scoped as a controlled evaluation harness for **VHD11K** (`all_10000_evenHarmfulUnharmful`), which pairs harmful images 1:1 against visually matched hard negatives across web (`concept`) and synthetic (`sdxl`) cohorts and defines ground truth via a 3-VLM debate judge. Accordingly, it models **post-pre-filter semantic triage** rather than raw ~1%-prevalence platform upload streams.
+
+Adapting the core runner and routing pipeline to production or custom datasets involves four extensions:
+1. **Asymmetric Funnel Thresholds (`[tau_clear, tau_block]`):** Replacing balanced symmetric `|logit(p)| < c` routing with prior- and cost-calibrated safe-clearing / escalation thresholds (see `disrated sweep-thresholds`).
+2. **Multi-Head Policy Probes:** Fitting separate lightweight linear heads per policy category over cached embeddings rather than collapsing diverse harms into a single binary target.
+3. **Log-Odds Fusion:** Combining Tier 0 and Tier 2 calibrated log-odds on escalated items rather than discarding Tier 0's margin.
+4. **Custom Manifest Loader:** Plugging a generic `.jsonl`/`.csv` dataset loader alongside `disrated.data.vhd11k`.
+
+---
+
 ## Repository Structure
 
 ```text
 disrated/
+├── CLAUDE.md                        # Methodological invariants & contributor rules
 ├── HYPOTHESIS.md                    # Pre-specified evaluation protocol & falsification rules
 ├── pyproject.toml                   # Package metadata and dependencies
 ├── splits.v2.json                   # Component-isolated 80/10/10 split manifest
 ├── src/
 │   └── disrated/
+│       ├── __init__.py              # Top-level `disrated` CLI router
+│       ├── __main__.py              # `python -m disrated` entrypoint
 │       ├── data/
 │       │   ├── splits.py            # Stratified group k-fold partitioning
 │       │   └── vhd11k.py            # VHD11K CSV parser and integrity loader
@@ -178,6 +196,7 @@ disrated/
 │       │   └── scoring.py           # Binary metrics, slice aggregation, latency stats
 │       ├── models/
 │       │   ├── base.py              # Abstract BaseModerator contract
+│       │   ├── d1_mlx.py            # LiquidAI/d1-2B-MLX-fp16 System-1 VLM adapter
 │       │   ├── dummy.py             # Constant and pixel-hash Random baselines
 │       │   └── nudenet_mod.py       # NudeNet v3 ONNX detector wrapper
 │       ├── audit_clip.py            # Cross-split cosine similarity & SDXL seed audit
@@ -193,12 +212,17 @@ disrated/
 │       ├── risk_coverage.py         # One-knob logit routing & bootstrap CI table
 │       ├── runner.py                # Resumable JSONL runner & clean pixel loader
 │       ├── schema.py                # Pydantic ModeratorOutput and Prediction schemas
-│       └── score.py                 # CLI entrypoint for scoring and provenance checks
+│       ├── score.py                 # CLI entrypoint for scoring and provenance checks
+│       ├── sweep_thresholds.py      # Two-knob asymmetric threshold grid search
+│       └── val_gate.py              # Phase 3 Platt calibration & validation gate lock
 └── tests/
+    ├── test_cli.py                  # Top-level CLI dispatch & help/version tests
+    ├── test_d1_mlx.py               # d1-2B MLX adapter & blind-pixel contract tests
+    ├── test_evalrun.py              # End-to-end evalrun + split provenance hash tests
     ├── test_metrics.py              # Parity tests against scikit-learn references
     ├── test_runner.py               # Crash recovery, config lock, and pixel-strip tests
+    ├── test_val_gate.py             # Validation gate selection & Platt calibration tests
     └── test_vhd11k.py               # Filename regex and group split disjointness tests
-
 ```
 
 ---
@@ -207,5 +231,4 @@ disrated/
 
 ```bash
 uv run pytest
-
 ```

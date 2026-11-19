@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -18,25 +19,44 @@ def build(name: str):
     if name == "nudenet":
         from .models.nudenet_mod import NudeNet
         return NudeNet()
+    if name == "d1-2b-mlx":
+        from .models.d1_mlx import LiquidD1MLXModerator
+        return LiquidD1MLXModerator()
     raise SystemExit(f"unknown model: {name}")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(prog="python -m disrated.evalrun")
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(prog="disrated evalrun")
     ap.add_argument("--model", required=True)
     ap.add_argument("--dataset", type=Path, required=True)
+    ap.add_argument("--splits", type=Path, default=Path("splits.v2.json"), help="path to the active splits JSON file")
     ap.add_argument("--split", default="test", choices=["train", "val", "test", "all"])
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--limit", type=int)
     ap.add_argument("--output", type=Path)
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     samples, _ = load_vhd11k(a.dataset.expanduser())
-    if a.split != "all":
-        ids = set(json.loads(a.splits.read_text())[a.split])
-        samples = [s for s in samples if s.sample_id in ids]
+    splits_sha256 = None
+    if a.splits is not None:
+        splits_path = a.splits.expanduser()
+        if splits_path.is_file():
+            splits_raw = splits_path.read_text(encoding="utf-8")
+            splits_sha256 = hashlib.sha256(splits_raw.encode("utf-8")).hexdigest()
+            if a.split != "all":
+                splits_data = json.loads(splits_raw)
+                if a.split not in splits_data:
+                    raise KeyError(f"split '{a.split}' not in {splits_path}")
+                ids = set(splits_data[a.split])
+                samples = [s for s in samples if s.sample_id in ids]
+        elif a.split != "all":
+            raise FileNotFoundError(f"splits file '{splits_path}' required for split '{a.split}' not found")
+    elif a.split != "all":
+        raise ValueError(f"--splits required when --split is not 'all'")
+
+    extra = {"splits_sha256": splits_sha256} if splits_sha256 else None
     out = a.output or Path(f"results/{a.model}-{a.split}.jsonl")
-    print(run(build(a.model), samples, out, a.batch_size, a.limit))
+    print(run(build(a.model), samples, out, a.batch_size, a.limit, extra=extra))
     print("wrote", out)
 
 

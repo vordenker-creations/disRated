@@ -1,9 +1,21 @@
 [project]
 name = "disrated"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.1"
+description = "Evaluation harness and selective-classification benchmark for VHD11K visual harm moderation."
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [
+    { name = "Nguyễn Hoàng Thiên Bảo", email = "vordenker.org@gmail.com" },
+    { name = "Nguyễn Thị Thúy Vân" },
+]
+keywords = ["content-moderation", "trust-and-safety", "selective-classification", "benchmark", "vlm", "clip"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "imagehash>=4.3.2",
     "nudenet>=3.4.2",
@@ -16,8 +28,17 @@ dependencies = [
     "transformers>=5.19.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/vordenker-creations/disRated"
+Issues = "https://github.com/vordenker-creations/disRated/issues"
+
 [project.scripts]
 disrated = "disrated:main"
+
+[project.optional-dependencies]
+mac = [
+    "mlx-vlm>=0.7.11",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]

@@ -23,8 +23,8 @@ def fmt(x) -> str:
     return "-" if x is None else (f"{x:.3f}" if isinstance(x, float) else str(x))
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(prog="python -m disrated.score")
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(prog="disrated score")
     ap.add_argument("predictions", type=Path)
     ap.add_argument("--dataset", type=Path, required=True)
     ap.add_argument("--splits", type=Path, required=True, help="path to the active splits JSON file")
@@ -32,7 +32,7 @@ def main() -> None:
     ap.add_argument("--threshold", type=float, default=0.5)
     ap.add_argument("--concepts", action="store_true", help="also print the per-concept table")
     ap.add_argument("--json", type=Path, help="write the full report here")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     samples, _ = load_vhd11k(a.dataset.expanduser())
     if a.split != "all":
@@ -43,17 +43,12 @@ def main() -> None:
     splits_raw = a.splits.read_text(encoding="utf-8")
     expected_hash = hashlib.sha256(splits_raw.encode("utf-8")).hexdigest()
 
-    # Verify provenance against prediction metadata
-    logged_hash = None
-    for p in preds.values():
-        if "splits_sha256" in p.extra:
-            logged_hash = p.extra["splits_sha256"]
-            break
-
-    if logged_hash is not None and logged_hash != expected_hash:
+    # Verify provenance across all prediction records
+    logged_hashes = {p.extra["splits_sha256"] for p in preds.values() if "splits_sha256" in p.extra}
+    if logged_hashes and logged_hashes != {expected_hash}:
         raise SystemExit(
             f"ERROR: Splits hash mismatch.\n"
-            f"  Prediction metadata: {logged_hash}\n"
+            f"  Prediction metadata: {sorted(logged_hashes)}\n"
             f"  Supplied splits:     {expected_hash}\n"
             f"Pass the matching splits file to score this run."
         )

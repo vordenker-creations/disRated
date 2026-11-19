@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 from pathlib import Path
 import numpy as np
@@ -49,23 +51,41 @@ def boot_ci(z: np.ndarray, y: np.ndarray, c: float, n_boot: int = 2000, seed: in
     }
 
 
-def main() -> None:
-    root = Path("~/Downloads/dataset_10000_1000").expanduser()
-    samples, _ = load_vhd11k(root)
-    by_id = {s.sample_id: s for s in samples}
-    sp = json.loads(Path("splits.v2.json").read_text(encoding="utf-8"))
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(prog="disrated risk-coverage")
+    ap.add_argument("--dataset", type=Path, required=True, help="path to VHD11K dataset root")
+    ap.add_argument("--splits", type=Path, default=Path("splits.v2.json"), help="path to active splits JSON")
+    ap.add_argument("--val-preds", type=Path, default=Path("results/clip-b16-v2-val.jsonl"))
+    ap.add_argument("--test-preds", type=Path, default=Path("results/clip-b16-v2-test.jsonl"))
+    ap.add_argument("--n-boot", type=int, default=2000)
+    ap.add_argument("--seed", type=int, default=0)
+    a = ap.parse_args(argv)
 
-    def load(split: str):
-        preds = read_predictions(Path(f"results/clip-b16-v2-{split}.jsonl"))
+    samples, _ = load_vhd11k(a.dataset.expanduser())
+    by_id = {s.sample_id: s for s in samples}
+    splits_raw = a.splits.expanduser().read_text(encoding="utf-8")
+    expected_hash = hashlib.sha256(splits_raw.encode("utf-8")).hexdigest()
+    sp = json.loads(splits_raw)
+
+    def load(split: str, pred_path: Path):
+        preds = read_predictions(pred_path.expanduser())
+        logged_hashes = {p.extra["splits_sha256"] for p in preds.values() if "splits_sha256" in p.extra}
+        if logged_hashes and logged_hashes != {expected_hash}:
+            raise SystemExit(
+                f"ERROR: Splits hash mismatch in {pred_path}: {logged_hashes} != {expected_hash}"
+            )
         s = np.array([preds[i].score for i in sp[split]])
         y = np.array([by_id[i].harmful for i in sp[split]])
         return s, y
 
-    sv, yv = load("val")
-    st, yt = load("test")
-    zv, zt = logit(sv), logit(st)
+    sv, yv = load("val", a.val_preds)
+    zv = logit(sv)
+    eval_splits: list[tuple[str, np.ndarray, np.ndarray]] = [("val", zv, yv)]
+    if a.test_preds.expanduser().is_file():
+        st, yt = load("test", a.test_preds)
+        eval_splits.append(("test", logit(st), yt))
 
-    print("=== ONE-KNOB RISK-COVERAGE TABLE (splits.v2.json, B=2000 bootstrap) ===")
+    print(f"=== ONE-KNOB RISK-COVERAGE TABLE ({a.splits.name}, B={a.n_boot} bootstrap) ===")
     header = (
         f"{'target':>6} {'split':>5} | {'esc':>6} {'n_band':>6} | "
         f"{'acc(resolved) [95% CI]':>24} | {'acc(band) [95% CI]':>24} | "
@@ -76,9 +96,9 @@ def main() -> None:
 
     for k in (0.10, 0.20, 0.30, 0.40, 0.50):
         c = float(np.quantile(np.abs(zv), k))
-        for name, z, y in (("val", zv, yv), ("test", zt, yt)):
+        for name, z, y in eval_splits:
             m = compute_metrics(z, y, c)
-            ci = boot_ci(z, y, c)
+            ci = boot_ci(z, y, c, n_boot=a.n_boot, seed=a.seed)
             res_str = f"{m['acc_res']:.3f} [{ci['acc_res'][0]:.3f}, {ci['acc_res'][1]:.3f}]"
             band_str = f"{m['acc_band']:.3f} [{ci['acc_band'][0]:.3f}, {ci['acc_band'][1]:.3f}]"
             print(

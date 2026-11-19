@@ -63,12 +63,14 @@ def run(
     out: Path,
     batch_size: int = 16,
     limit: int | None = None,
+    extra: dict | None = None,
 ) -> dict:
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     _check_meta(out, moderator)
     done = _prepare_resume(out)
     todo = [s for s in samples[:limit] if s.sample_id not in done]
+    extra_dict = dict(extra) if extra else {}
 
     n_err = 0
     with out.open("a", encoding="utf-8") as f:
@@ -80,7 +82,14 @@ def run(
                     imgs.append(load_clean(s.path))  # moderator gets pixels only, never the Sample
                     ok.append(s)
                 except Exception as e:
-                    preds.append(Prediction(sample_id=s.sample_id, latency_ms=0.0, error=f"load: {e!r}"))
+                    preds.append(
+                        Prediction(
+                            sample_id=s.sample_id,
+                            latency_ms=0.0,
+                            error=f"load: {e!r}",
+                            extra=extra_dict.copy(),
+                        )
+                    )
 
             if imgs:
                 t0 = time.perf_counter()
@@ -94,9 +103,18 @@ def run(
                 ms = (time.perf_counter() - t0) * 1000 / len(imgs)
                 for s, o in zip(ok, outs):
                     if o is None:
-                        preds.append(Prediction(sample_id=s.sample_id, latency_ms=ms, error=err))
+                        preds.append(
+                            Prediction(
+                                sample_id=s.sample_id,
+                                latency_ms=ms,
+                                error=err,
+                                extra=extra_dict.copy(),
+                            )
+                        )
                     else:
-                        preds.append(Prediction(sample_id=s.sample_id, latency_ms=ms, **o.model_dump()))
+                        d = o.model_dump()
+                        d["extra"] = {**extra_dict, **d.get("extra", {})}
+                        preds.append(Prediction(sample_id=s.sample_id, latency_ms=ms, **d))
 
             for p in preds:
                 f.write(p.model_dump_json() + "\n")

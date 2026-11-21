@@ -1,6 +1,6 @@
 # disRated
 
-> **Current Status (v0.1.1 — Active Research Prototype):** This package is an experimental evaluation harness under active development (currently at **Phase 3 of 4**), accompanying a VKU research benchmark study on selective visual moderation.
+> **Current Status (v0.1.2 — Active Research Prototype):** This package is an experimental evaluation harness under active development (currently at **Phase 3 of 4**), accompanying a VKU research benchmark study on selective visual moderation.
 > * **Implemented & Verified:** Top-level `disrated` CLI, dataset ingestion (`VHD11K`), perceptual-hash and feature-space deduplication (`splits.v2.json`), crash-resumable `.jsonl` evaluation runners, dummy/NudeNet baselines, Tier 0 CLIP linear probes (`0.882` test ROC-AUC), one-knob selective routing sweeps, Apple Silicon Tier 2 VLM adapter (`d1-2b-mlx`), and Phase 3 validation gate (`disrated val-gate`).
 > * **In Progress / Not Yet Implemented:** Additional Tier 2 VLM adapters (generative CoT / CUDA server backbones) and Phase 4 held-out `test` cascade evaluation (`splits.v2.json["test"]` remains sealed for Tier 2). Do not use this in production.
 > 

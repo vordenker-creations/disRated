@@ -1,6 +1,6 @@
 [project]
 name = "disrated"
-version = "0.1.1"
+version = "0.1.2"
 description = "Evaluation harness and selective-classification benchmark for VHD11K visual harm moderation."
 readme = "README.md"
 requires-python = ">=3.12"

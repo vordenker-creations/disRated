@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 HELP_TEXT = """disRated: Evaluation harness and selective-classification benchmark for Trust & Safety moderation.
 

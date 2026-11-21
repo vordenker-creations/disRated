@@ -208,6 +208,7 @@ disrated/
 │       ├── audit_effect.py          # Leakage effect-size bootstrap analyser
 │       ├── audit_hashes.py          # 64-bit pHash & dHash pairwise split auditor
 │       ├── embed.py                 # Batched vision feature extractor (CUDA / MPS / CPU)
+│       ├── finetune.py              # Full fine-tuning baselines: ResNet-50, ConvNeXt-T, ViT-B/16, CLIP (RQ2)
 │       ├── eval_test.py             # Phase 4 held-out test evaluator from locked val gate
 │       ├── evalrun.py               # CLI entrypoint for model inference runs
 │       ├── probe.py                 # Logistic regression probe trainer & OOF evaluator
@@ -216,6 +217,7 @@ disrated/
 │       ├── runner.py                # Resumable JSONL runner & clean pixel loader
 │       ├── schema.py                # Pydantic ModeratorOutput and Prediction schemas
 │       ├── score.py                 # CLI entrypoint for scoring and provenance checks
+│       ├── summarize.py             # Multi-seed bootstrap CIs & paired run comparisons
 │       ├── sweep_thresholds.py      # Two-knob asymmetric threshold grid search
 │       └── val_gate.py              # Phase 3 Platt calibration & validation gate lock
 └── tests/

@@ -46,8 +46,9 @@ For local development and full benchmark reproduction using [`uv`](https://githu
 ```bash
 git clone https://github.com/vordenker/disrated.git
 cd disrated
-uv sync
-
+uv sync                 # core harness (CPU / MPS / CUDA CLIP probes & scoring)
+uv sync --extra mac     # Apple Silicon MLX Tier 2 VLM (d1-2b-mlx)
+uv sync --extra cuda    # Linux CUDA FP8 Tier 2 VLM (qwen3-vl-8b-fp8)
 ```
 
 ---
@@ -144,7 +145,7 @@ All results below are evaluated against VHD11K's binary `decision` judge labels 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `constant-0` (Always Safe) | `test` | 1.000 | 0.500 | - | 0.000 | 1.000 | 0.333 | 0.500 | 0.500 | - |
 | `constant-1` (Always Harm) | `test` | 1.000 | 0.500 | 0.500 | 1.000 | 0.000 | 0.333 | 0.500 | 0.500 | - |
-| `random` (Pixel SHA-256) | `test` | 1.000 | 0.496 | 0.496 | 0.482 | 0.510 | 0.496 | 0.504 | 0.514 | - |
+| `random` (Pixel SHA-256) | `test` | 1.000 | 0.508 | 0.508 | 0.502 | 0.514 | 0.508 | 0.505 | 0.506 | 1.17 (CPU) |
 | `nudenet` (5-Class Explicit) | `all` | 1.000 | 0.512 | 0.754 | 0.036 | 0.988 | 0.369 | 0.522 | 0.518 | 15.28 (CPU) |
 | **`clip-b16-v2` (Tier 0 Probe)** | `test` | **1.000** | **0.803** | **0.816** | **0.782** | **0.824** | **0.803** | **0.884** | **0.882** | **11.58 (MPS)** |
 | ├── `concept` cohort (`n=500`) | `test` | 1.000 | 0.808 | 0.824 | 0.784 | 0.832 | 0.808 | 0.890 | 0.883 | 11.58 (MPS) |
@@ -198,14 +199,16 @@ disrated/
 │       │   ├── base.py              # Abstract BaseModerator contract
 │       │   ├── d1_mlx.py            # LiquidAI/d1-2B-MLX-fp16 System-1 VLM adapter
 │       │   ├── dummy.py             # Constant and pixel-hash Random baselines
-│       │   └── nudenet_mod.py       # NudeNet v3 ONNX detector wrapper
+│       │   ├── nudenet_mod.py       # NudeNet v3 ONNX detector wrapper
+│       │   └── qwen3_vl.py          # Qwen3-VL-8B-Instruct-FP8 single-pass logit adapter
 │       ├── audit_clip.py            # Cross-split cosine similarity & SDXL seed audit
 │       ├── audit_components.py      # Connected-component size distribution inspector
 │       ├── audit_dhash_residuals.py # Gradient hash residual inspector
 │       ├── audit_duplicate_labels.py# Inter-duplicate label consistency audit
 │       ├── audit_effect.py          # Leakage effect-size bootstrap analyser
 │       ├── audit_hashes.py          # 64-bit pHash & dHash pairwise split auditor
-│       ├── embed.py                 # Batched CLIP feature extractor (CUDA / MPS / CPU)
+│       ├── embed.py                 # Batched vision feature extractor (CUDA / MPS / CPU)
+│       ├── eval_test.py             # Phase 4 held-out test evaluator from locked val gate
 │       ├── evalrun.py               # CLI entrypoint for model inference runs
 │       ├── probe.py                 # Logistic regression probe trainer & OOF evaluator
 │       ├── rebuild_splits.py        # Graph connected-components split builder
@@ -218,11 +221,14 @@ disrated/
 └── tests/
     ├── test_cli.py                  # Top-level CLI dispatch & help/version tests
     ├── test_d1_mlx.py               # d1-2B MLX adapter & blind-pixel contract tests
-    ├── test_evalrun.py              # End-to-end evalrun + split provenance hash tests
+    ├── test_eval_test.py            # Phase 4 held-out evaluator & criteria unit tests
+    ├── test_evalrun.py              # End-to-end evalrun, coverage & provenance hash tests
     ├── test_metrics.py              # Parity tests against scikit-learn references
-    ├── test_runner.py               # Crash recovery, config lock, and pixel-strip tests
-    ├── test_val_gate.py             # Validation gate selection & Platt calibration tests
-    └── test_vhd11k.py               # Filename regex and group split disjointness tests
+    ├── test_qwen3_vl.py             # Qwen3-VL logit extraction & refusal fallback tests
+    ├── test_rebuild_splits.py       # Cache ID alignment & shuffled-cache invariance tests
+    ├── test_runner.py               # Crash recovery, config/split lock, pixel-strip tests
+    ├── test_val_gate.py             # Cluster bootstrap, MC random-control & Platt tests
+    └── test_vhd11k.py               # Filename regex, taxonomy & split disjointness tests
 ```
 
 ---

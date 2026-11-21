@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from importlib.metadata import version
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -10,8 +12,11 @@ from .base import BaseModerator
 
 # Which detector classes count towards the score. A choice, not a fact.
 EXPLICIT = (
-    "FEMALE_BREAST_EXPOSED", "FEMALE_GENITALIA_EXPOSED", "MALE_GENITALIA_EXPOSED",
-    "ANUS_EXPOSED", "BUTTOCKS_EXPOSED",
+    "FEMALE_BREAST_EXPOSED",
+    "FEMALE_GENITALIA_EXPOSED",
+    "MALE_GENITALIA_EXPOSED",
+    "ANUS_EXPOSED",
+    "BUTTOCKS_EXPOSED",
 )
 
 
@@ -24,10 +29,10 @@ class NudeNet(BaseModerator):
         self.classes = tuple(classes)
         self.detector = NudeDetector()
 
-    def config(self):
+    def config(self) -> dict[str, Any]:
         return {"classes": list(self.classes), "nudenet_version": version("nudenet")}
 
-    def predict(self, images: list[Image.Image]) -> list[ModeratorOutput]:
+    def predict(self, images: Sequence[Image.Image]) -> list[ModeratorOutput]:
         outs = []
         for im in images:
             arr = np.asarray(im)[:, :, ::-1].copy()  # PIL is RGB, cv2 (which NudeNet uses) is BGR

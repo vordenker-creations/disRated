@@ -15,13 +15,22 @@ def _samples(tmp_path: Path, n: int = 25) -> list[Sample]:
     for i in range(n):
         p = tmp_path / f"gun_000_{i:05d}.png"
         Image.new("RGB", (8, 8), (i * 10 % 256, 0, 0)).save(p)
-        out.append(Sample(sample_id=p.name, path=p, harmful=i % 2 == 0, harm_type="",
-                          source="concept", concept="gun", group=p.name))
+        out.append(
+            Sample(
+                sample_id=p.name,
+                path=p,
+                harmful=i % 2 == 0,
+                harm_type="",
+                source="concept",
+                concept="gun",
+                group=p.name,
+            )
+        )
     return out
 
 
 def _read(path: Path) -> list[Prediction]:
-    return [Prediction.model_validate_json(l) for l in path.read_text().splitlines()]
+    return [Prediction.model_validate_json(line) for line in path.read_text().splitlines()]
 
 
 def test_run_and_resume(tmp_path):

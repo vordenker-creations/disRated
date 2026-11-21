@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+
 import numpy as np
 
 from .data.vhd11k import load_vhd11k
+from .rebuild_splits import align_cache_by_ids, find_duplicate_edges
 
 
 def main() -> None:
@@ -21,43 +23,30 @@ def main() -> None:
     all_ids = [s.sample_id for s in samples]
 
     z_emb = np.load(a.embeddings, allow_pickle=False)
-    feats = z_emb["feats"]
+    feats = align_cache_by_ids(all_ids, z_emb["ids"].tolist(), z_emb["feats"], str(a.embeddings))
 
     z_hash = np.load(a.hashes, allow_pickle=False)
-    phash = z_hash["phash"]
-    lut = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
+    if "ids" not in z_hash:
+        raise SystemExit(f"ERROR: {a.hashes} does not contain an 'ids' array for safe alignment.")
+    phash = align_cache_by_ids(all_ids, z_hash["ids"].tolist(), z_hash["phash"], str(a.hashes))
 
-    pairs = set()
-    n = len(samples)
-    chunk = 1000
-
-    for i in range(0, n, chunk):
-        end_i = min(i + chunk, n)
-        # Cosine pairs
-        cos = np.matmul(feats[i:end_i], feats.T)
-        for r_off in range(end_i - i):
-            g_r = i + r_off
-            cos[r_off, :g_r + 1] = 0.0
-        r_c, c_c = np.where(cos >= a.cosine_threshold)
-        for r, c in zip(r_c, c_c):
-            pairs.add((i + r, c))
-
-        # pHash pairs
-        for r_off in range(end_i - i):
-            g_r = i + r_off
-            xor = np.bitwise_xor(phash[g_r:g_r + 1], phash[g_r + 1:])
-            dists = lut[xor].sum(axis=-1)
-            for col in np.where(dists <= a.phash_threshold)[0]:
-                pairs.add((g_r, g_r + 1 + col))
+    raw_edges = find_duplicate_edges(
+        all_ids,
+        feats,
+        phash,
+        cosine_threshold=a.cosine_threshold,
+        phash_threshold=a.phash_threshold,
+    )
+    pairs = {tuple(sorted((u, v))) for u, v in raw_edges}
 
     agreed = 0
     disagreed = 0
     by_type = {"concept_concept": [0, 0], "sdxl_sdxl": [0, 0], "cross": [0, 0]}
 
-    for i, j in pairs:
-        s1 = by_id[all_ids[i]]
-        s2 = by_id[all_ids[j]]
-        match = (s1.harmful == s2.harmful)
+    for sid1, sid2 in pairs:
+        s1 = by_id[sid1]
+        s2 = by_id[sid2]
+        match = s1.harmful == s2.harmful
 
         if match:
             agreed += 1

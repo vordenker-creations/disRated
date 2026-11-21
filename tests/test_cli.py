@@ -1,5 +1,7 @@
 import pytest
-from disrated import HELP_TEXT, __version__, main as cli_main
+
+from disrated import __version__
+from disrated import main as cli_main
 
 
 def test_cli_help(capsys):
@@ -9,6 +11,7 @@ def test_cli_help(capsys):
     assert "evalrun, run" in captured.out
     assert "score" in captured.out
     assert "val-gate" in captured.out
+    assert "eval-test" in captured.out
     assert "risk-coverage" in captured.out
 
 
@@ -50,6 +53,12 @@ def test_cli_subcommand_dispatch_help(capsys):
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     assert "--tau-mode" in captured.out
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["eval-test", "--help"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "--gate GATE" in captured.out
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["risk-coverage", "--help"])

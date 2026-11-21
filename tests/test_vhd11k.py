@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from disrated.data.splits import make_splits
-from disrated.data.vhd11k import Sample, parse_name
+from disrated.data.vhd11k import (
+    CONCRETE_HARM_CONCEPTS,
+    CONTEXTUAL_NORMATIVE_CONCEPTS,
+    Sample,
+    concept_taxonomy,
+    parse_name,
+)
 
 
 def test_parse_sdxl():
@@ -21,8 +27,7 @@ def _fake(n=2000):
             name = f"sdxl_extend_by_llama3_harmful_{i // 4:05d}_seed{2024 + i % 6}.png"
         else:
             name = f"gun_000_{i:05d}.jpeg"
-        out.append(Sample(sample_id=name, path=Path(name), harmful=(i % 3 == 0),
-                          harm_type="", **parse_name(name)))
+        out.append(Sample(sample_id=name, path=Path(name), harmful=(i % 3 == 0), harm_type="", **parse_name(name)))
     return out
 
 
@@ -35,3 +40,11 @@ def test_splits_disjoint_complete_and_grouped():
     seen = {}
     for x in s:
         assert seen.setdefault(x.group, which[x.sample_id]) == which[x.sample_id]
+
+
+def test_concept_taxonomy_partition_is_disjoint_and_45_tags():
+    assert CONCRETE_HARM_CONCEPTS.isdisjoint(CONTEXTUAL_NORMATIVE_CONCEPTS)
+    assert len(CONCRETE_HARM_CONCEPTS) + len(CONTEXTUAL_NORMATIVE_CONCEPTS) == 45
+    assert concept_taxonomy("gun") == "concrete_harm"
+    assert concept_taxonomy("alcohol") == "contextual_normative"
+    assert concept_taxonomy(None) is None

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import inspect
 import json
 import math
+from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
@@ -10,6 +12,9 @@ from PIL import Image
 
 from ..schema import ModeratorOutput
 from .base import BaseModerator
+
+DEFAULT_D1_MODEL_ID = "LiquidAI/d1-2B-MLX-fp16"
+DEFAULT_D1_REVISION = "f4e6e118bf850880e6f45a5b22085057778ac243"
 
 HARM_QUESTIONS: dict[str, dict[str, str]] = {
     "harmful": {
@@ -63,32 +68,41 @@ class LiquidD1MLXModerator(BaseModerator):
 
     def __init__(
         self,
-        model_id: str = "LiquidAI/d1-2B-MLX-fp16",
-        threshold: float = 0.50,
+        model_id: str = DEFAULT_D1_MODEL_ID,
+        revision: str | None = DEFAULT_D1_REVISION,
         questions: dict[str, dict[str, str]] | None = None,
         cache_limit_mb: int | None = 512,
     ) -> None:
-        from mlx_vlm import load
+        from mlx_vlm import load  # pyright: ignore[reportPrivateImportUsage]
 
         _set_mlx_cache_limit(cache_limit_mb)
         self.model_id = model_id
-        self.threshold = threshold
+        self.revision = revision
         self.questions = questions or HARM_QUESTIONS
-        self.model, self.processor = load(model_id)
+
+        sig = inspect.signature(load)
+        if revision is not None and (
+            "revision" in sig.parameters
+            or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        ):
+            self.model, self.processor = load(model_id, revision=revision)
+        else:
+            self.model, self.processor = load(model_id)
 
     def config(self) -> dict[str, Any]:
         return {
             "model_id": self.model_id,
+            "revision": self.revision,
             "questions": self.questions,
             "mlx_vlm_version": _mlx_vlm_version(),
         }
 
-    def predict(self, images: list[Image.Image | np.ndarray]) -> list[ModeratorOutput]:
+    def predict(self, images: Sequence[Image.Image | np.ndarray]) -> list[ModeratorOutput]:
         outputs: list[ModeratorOutput] = []
         for img in images:
             # Maintain blind-ingest guarantee: accept stripped PIL images (or raw RGB arrays)
             pil_img = _to_clean_pil(img)
-            res = self.model.system_one(
+            res = self.model.system_one(  # pyright: ignore[reportOptionalCall]
                 state=None,
                 questions=self.questions,
                 media=[pil_img],

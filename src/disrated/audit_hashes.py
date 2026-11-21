@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
+
 import imagehash
 import numpy as np
 
@@ -34,7 +36,7 @@ def compute_hashes(samples, cache_path: Path) -> dict[str, np.ndarray]:
 
 
 def hamming_chunked(a: np.ndarray, b: np.ndarray, chunk_size: int = 500) -> np.ndarray:
-    lut = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
+    lut = np.array([i.bit_count() for i in range(256)], dtype=np.uint8)
     dists = np.zeros((a.shape[0], b.shape[0]), dtype=np.uint8)
     for start in range(0, a.shape[0], chunk_size):
         end = min(start + chunk_size, a.shape[0])
@@ -43,7 +45,7 @@ def hamming_chunked(a: np.ndarray, b: np.ndarray, chunk_size: int = 500) -> np.n
     return dists
 
 
-def audit_hamming(samples, hashes: dict[str, np.ndarray], splits_path: Path) -> dict:
+def audit_hamming(samples, hashes: dict[str, np.ndarray], splits_path: Path) -> dict[str, Any]:
     splits = json.loads(splits_path.read_text(encoding="utf-8"))
     id_to_idx = {sid: idx for idx, sid in enumerate(hashes["ids"].tolist())}
     by_id = {s.sample_id: s for s in samples}
@@ -70,7 +72,7 @@ def audit_hamming(samples, hashes: dict[str, np.ndarray], splits_path: Path) -> 
             for t in [0, 4, 8]:
                 r, c = np.where(dists <= t)
                 breakdown = {"concept_concept": 0, "sdxl_sdxl": 0, "cross_source": 0}
-                for i_pos, j_pos in zip(r, c):
+                for i_pos, j_pos in zip(r, c, strict=True):
                     s1 = by_id[ids1[i_pos]]
                     s2 = by_id[ids2[j_pos]]
                     if s1.source == "concept" and s2.source == "concept":

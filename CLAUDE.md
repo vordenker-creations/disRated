@@ -19,4 +19,4 @@ All code changes, adapters, scripts, and evaluation runs must strictly obey the 
 
 - **Moderator interface:** Subclass `disrated.models.base.BaseModerator` (`name: str`, `config() -> dict[str, Any]`, `predict(images: list[Image.Image]) -> list[ModeratorOutput]`).
 - **Prediction schema (`disrated.schema`):** `ModeratorOutput` fields are `score` ($\in [0, 1]$), `verdict`, `refused`, `raw_output`, `extra`. `runner.run()` wraps each into `Prediction` with `sample_id`, `latency_ms`, and `error`.
-- **Tests:** Run `uv run pytest` after edits. Keep Apple-only packages (`mlx-vlm>=0.7.11`) isolated under `[project.optional-dependencies] mac` so Linux CUDA nodes (`vor-lab`) stay clean.
+- **Tests:** Run `uv run pytest` after edits. Keep Apple-only packages (`mlx-vlm>=0.7.11`) isolated under `[project.optional-dependencies] mac` and CUDA FP8 VLM packages (`accelerate>=1.0.0`, `kernels>=0.17.0,<0.18.0`) under `[project.optional-dependencies] cuda` so each hardware target stays clean (`uv sync --extra mac` on Apple Silicon; `uv sync --extra cuda` on Linux CUDA nodes like `vor-lab`).

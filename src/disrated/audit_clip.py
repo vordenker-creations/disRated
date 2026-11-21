@@ -4,6 +4,7 @@ import argparse
 import json
 import random
 from pathlib import Path
+
 import numpy as np
 
 from .data.vhd11k import load_vhd11k
@@ -36,7 +37,7 @@ def main() -> None:
     print("\n=== TEST -> TRAIN MAX COSINE SIMILARITY ===")
     qs = [0, 25, 50, 75, 90, 95, 99, 100]
     vals = np.percentile(max_sims, qs)
-    for q, v in zip(qs, vals):
+    for q, v in zip(qs, vals, strict=True):
         print(f"p{q:<3}: {v:.4f}")
 
     print("\nThreshold exceedances (Test N=1000):")
@@ -68,8 +69,12 @@ def main() -> None:
     sp = np.array(same_prompt_sims)
     rd = np.array(random_sdxl_sims)
     print(f"\n=== SDXL PAIRWISE COSINE SIMILARITY (N={len(sp)}) ===")
-    print(f"Same prompt index:   mean={sp.mean():.4f} | median={np.median(sp):.4f} | IQR={np.percentile(sp, 75) - np.percentile(sp, 25):.4f}")
-    print(f"Random prompt index: mean={rd.mean():.4f} | median={np.median(rd):.4f} | IQR={np.percentile(rd, 75) - np.percentile(rd, 25):.4f}")
+    print(
+        f"Same prompt index:   mean={sp.mean():.4f} | median={np.median(sp):.4f} | IQR={np.percentile(sp, 75) - np.percentile(sp, 25):.4f}"
+    )
+    print(
+        f"Random prompt index: mean={rd.mean():.4f} | median={np.median(rd):.4f} | IQR={np.percentile(rd, 75) - np.percentile(rd, 25):.4f}"
+    )
 
 
 if __name__ == "__main__":

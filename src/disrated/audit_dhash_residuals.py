@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+
 import numpy as np
 
 from .data.vhd11k import load_vhd11k
@@ -27,7 +28,7 @@ def main() -> None:
     dhash = z_hash["dhash"]
     phash = z_hash["phash"]
     feats = z_emb["feats"]
-    lut = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
+    lut = np.array([i.bit_count() for i in range(256)], dtype=np.uint8)
 
     tr_ids = splits["train"]
     te_ids = splits["test"]
@@ -40,7 +41,7 @@ def main() -> None:
 
     for i, te_id in enumerate(te_ids):
         t_idx = te_idx[i]
-        xor_d = np.bitwise_xor(dhash[t_idx:t_idx + 1], dhash[tr_idx])
+        xor_d = np.bitwise_xor(dhash[t_idx : t_idx + 1], dhash[tr_idx])
         d_dists = lut[xor_d].sum(axis=-1)
 
         match_positions = np.where(d_dists <= 4)[0]

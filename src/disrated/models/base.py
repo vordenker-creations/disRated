@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import Any
 
 from PIL import Image
@@ -17,5 +18,5 @@ class BaseModerator(ABC):
         Stops a resumed run silently mixing configs."""
 
     @abstractmethod
-    def predict(self, images: list[Image.Image]) -> list[ModeratorOutput]:
+    def predict(self, images: Sequence[Image.Image]) -> list[ModeratorOutput]:
         """One output per image, same order."""

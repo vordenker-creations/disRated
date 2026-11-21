@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
+from typing import Any
 
 from PIL import Image
 from pydantic import ValidationError
@@ -26,14 +27,21 @@ def _meta_path(out: Path) -> Path:
     return out.with_suffix(out.suffix + ".meta.json")
 
 
-def _check_meta(out: Path, moderator: BaseModerator) -> None:
-    meta = json.loads(json.dumps({"moderator": moderator.name, "config": moderator.config()}, sort_keys=True))
+def _check_meta(
+    out: Path,
+    moderator: BaseModerator,
+    run_meta: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {"moderator": moderator.name, "config": moderator.config()}
+    if run_meta:
+        payload["run"] = run_meta
+    meta = json.loads(json.dumps(payload, sort_keys=True))
     mp = _meta_path(out)
     if mp.exists():
         old = json.loads(mp.read_text(encoding="utf-8"))
         if old != meta:
             raise RuntimeError(
-                f"{out} was produced by a different moderator/config. Use a new output path.\n"
+                f"{out} was produced by a different moderator/config/split. Use a new output path.\n"
                 f"  existing: {old}\n  requested: {meta}"
             )
     else:
@@ -63,14 +71,18 @@ def run(
     out: Path,
     batch_size: int = 16,
     limit: int | None = None,
-    extra: dict | None = None,
-) -> dict:
+    extra: dict[str, Any] | None = None,
+    run_meta: dict[str, Any] | None = None,
+) -> dict[str, int]:
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    _check_meta(out, moderator)
+    extra_dict = dict(extra) if extra else {}
+    effective_run_meta = dict(run_meta) if run_meta else None
+    if effective_run_meta is None and "splits_sha256" in extra_dict:
+        effective_run_meta = {"splits_sha256": extra_dict["splits_sha256"]}
+    _check_meta(out, moderator, run_meta=effective_run_meta)
     done = _prepare_resume(out)
     todo = [s for s in samples[:limit] if s.sample_id not in done]
-    extra_dict = dict(extra) if extra else {}
 
     n_err = 0
     with out.open("a", encoding="utf-8") as f:
@@ -101,7 +113,7 @@ def run(
                 except Exception as e:
                     outs, err = [None] * len(imgs), f"predict: {e!r}"
                 ms = (time.perf_counter() - t0) * 1000 / len(imgs)
-                for s, o in zip(ok, outs):
+                for s, o in zip(ok, outs, strict=True):
                     if o is None:
                         preds.append(
                             Prediction(

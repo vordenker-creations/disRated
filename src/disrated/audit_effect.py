@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
@@ -51,13 +52,13 @@ def main() -> None:
 
     # pHash check
     z_hash = np.load(a.hashes, allow_pickle=False)
-    lut = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
+    lut = np.array([i.bit_count() for i in range(256)], dtype=np.uint8)
     ph_tr = z_hash["phash"][tr_idx]
     ph_te = z_hash["phash"][te_idx]
 
     ph_leaked = set()
     for i in range(len(te_idx)):
-        xor = np.bitwise_xor(ph_te[i:i + 1], ph_tr)
+        xor = np.bitwise_xor(ph_te[i : i + 1], ph_tr)
         if np.any(lut[xor].sum(axis=-1) <= 8):
             ph_leaked.add(i)
 

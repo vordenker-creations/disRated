@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,28 +15,95 @@ IMG_DIR = "all_10000_evenHarmfulUnharmful"
 _SDXL = re.compile(r"^sdxl_extend_by_llama3_(harmful|unharmful)_(\d+)_seed(\d+)\.png$")
 _CONCEPT = re.compile(r"^(.+)_(\d+)_(\d+)\.\w+$")
 
+# Pre-registered partition of VHD11K's 45 concept tags (defined by tag semantics prior to Phase 4).
+CONCRETE_HARM_CONCEPTS: frozenset[str] = frozenset(
+    {
+        "animal_abuse",
+        "animal_genitalia_and_human",
+        "animal_genitalia_only",
+        "animated_animal_genitalia",
+        "animated_blood",
+        "animated_corpse",
+        "animated_gun",
+        "bloody",
+        "fetish_extremes",
+        "gun",
+        "hanging",
+        "human_corpse",
+        "knife_in_hand",
+        "nazi",
+        "noose",
+        "nudity",
+        "sex_toy",
+        "sexual_activity",
+        "shocking",
+        "terrorist",
+        "theft",
+        "violence",
+    }
+)
+
+CONTEXTUAL_NORMATIVE_CONCEPTS: frozenset[str] = frozenset(
+    {
+        "alcohol",
+        "animated_alcohol",
+        "bulge",
+        "cheating",
+        "cleavage",
+        "contamination",
+        "cruelty_in_the_animal_kingdom",
+        "culinary_knife_in_hand",
+        "emaciated_body",
+        "gambling",
+        "harrassment",
+        "inequality",
+        "injectables",
+        "lack_of_self_control",
+        "marijuana",
+        "obesity",
+        "obscene_gesture",
+        "pills",
+        "religious_icon",
+        "rudeness",
+        "sexual_intent",
+        "smoking",
+        "toy",
+    }
+)
+
+
+def concept_taxonomy(concept: str | None) -> str | None:
+    """Map a VHD11K concept tag to its pre-registered concrete vs. contextual_normative bucket."""
+    if concept is None:
+        return None
+    if concept in CONCRETE_HARM_CONCEPTS:
+        return "concrete_harm"
+    if concept in CONTEXTUAL_NORMATIVE_CONCEPTS:
+        return "contextual_normative"
+    return "other"
+
 
 class Sample(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    sample_id: str            # the CSV imagePath; unique
+    sample_id: str  # the CSV imagePath; unique
     path: Path
-    harmful: bool             # ground truth: the CSV `decision`
-    harm_type: str            # free-text VLM reason; error analysis only
+    harmful: bool  # ground truth: the CSV `decision`
+    harm_type: str  # free-text VLM reason; error analysis only
     source: Literal["sdxl", "concept"]
-    concept: str | None = None    # one of ~45 tags, concept-named half only
-    intent: bool | None = None    # what the filename claims (sdxl only). NEVER show to a model.
-    group: str                # split unit, so near-duplicates stay together
+    concept: str | None = None  # one of ~45 tags, concept-named half only
+    intent: bool | None = None  # what the filename claims (sdxl only). NEVER show to a model.
+    group: str  # split unit, so near-duplicates stay together
 
 
-def parse_name(name: str) -> dict:
+def parse_name(name: str) -> dict[str, Any]:
     if m := _SDXL.match(name):
         intent = m.group(1) == "harmful"
         # same prompt index across seeds -> same group
-        return dict(source="sdxl", intent=intent, group=f"sdxl:{m.group(1)}:{m.group(2)}")
+        return {"source": "sdxl", "intent": intent, "group": f"sdxl:{m.group(1)}:{m.group(2)}"}
     if m := _CONCEPT.match(name):
         # no known duplicate structure here, so each image is its own group
-        return dict(source="concept", concept=m.group(1), group=name)
+        return {"source": "concept", "concept": m.group(1), "group": name}
     raise ValueError(f"unrecognised filename: {name}")
 
 

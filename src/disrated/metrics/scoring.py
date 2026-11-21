@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from typing import Any
 
 from pydantic import ValidationError
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from ..data.vhd11k import Sample
 from ..schema import Prediction
+
 
 def read_predictions(path: Path) -> dict[str, Prediction]:
     preds: dict[str, Prediction] = {}
@@ -31,10 +33,10 @@ def hard_call(p: Prediction, threshold: float = 0.5) -> bool | None:
     return None
 
 
-def binary_metrics(y_true: Sequence[bool], y_pred: Sequence[bool]) -> dict:
+def binary_metrics(y_true: Sequence[bool], y_pred: Sequence[bool]) -> dict[str, Any]:
     """'Positive' = harmful. precision/recall/specificity are None when undefined;
     F1 follows sklearn's zero_division=0 convention."""
-    pairs = list(zip(y_true, y_pred))
+    pairs = list(zip(y_true, y_pred, strict=True))
     tp = sum(1 for t, p in pairs if t and p)
     fp = sum(1 for t, p in pairs if not t and p)
     tn = sum(1 for t, p in pairs if not t and not p)
@@ -49,25 +51,38 @@ def binary_metrics(y_true: Sequence[bool], y_pred: Sequence[bool]) -> dict:
         return 2 * a / d if d else 0.0
 
     if n == 0:
-        return dict(tp=0, fp=0, tn=0, fn=0, accuracy=None, precision=None, recall=None,
-                    specificity=None, f1=None, macro_f1=None)
+        return {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0,
+            "accuracy": None,
+            "precision": None,
+            "recall": None,
+            "specificity": None,
+            "f1": None,
+            "macro_f1": None,
+        }
     f1_pos, f1_neg = f1(tp, fp, fn), f1(tn, fn, fp)
-    return dict(
-        tp=tp, fp=fp, tn=tn, fn=fn,
-        accuracy=div(tp + tn, n),
-        precision=div(tp, tp + fp),
-        recall=div(tp, tp + fn),
-        specificity=div(tn, tn + fp),
-        f1=f1_pos,
-        macro_f1=(f1_pos + f1_neg) / 2,  # mean of F1(harmful) and F1(unharmful)
-    )
+    return {
+        "tp": tp,
+        "fp": fp,
+        "tn": tn,
+        "fn": fn,
+        "accuracy": div(tp + tn, n),
+        "precision": div(tp, tp + fp),
+        "recall": div(tp, tp + fn),
+        "specificity": div(tn, tn + fp),
+        "f1": f1_pos,
+        "macro_f1": (f1_pos + f1_neg) / 2,  # mean of F1(harmful) and F1(unharmful)
+    }
 
 
-def evaluate(samples: Sequence[Sample], preds: dict[str, Prediction], threshold: float = 0.5) -> dict:
+def evaluate(samples: Sequence[Sample], preds: dict[str, Prediction], threshold: float = 0.5) -> dict[str, Any]:
     """Metrics over `samples`. Anything without a usable call (missing, error, refusal)
     is excluded from the metrics but counted, and shows up in `coverage`."""
     y_true, y_pred, ys, sc = [], [], [], []
-    c = dict(missing=0, error=0, refused=0, unusable=0)
+    c = {"missing": 0, "error": 0, "refused": 0, "unusable": 0}
     for s in samples:
         p = preds.get(s.sample_id)
         if p is None:
@@ -95,8 +110,9 @@ def evaluate(samples: Sequence[Sample], preds: dict[str, Prediction], threshold:
     return out
 
 
-def slice_by(samples: Iterable[Sample], preds: dict[str, Prediction],
-             key: Callable[[Sample], str | None], threshold: float = 0.5) -> dict[str, dict]:
+def slice_by(
+    samples: Iterable[Sample], preds: dict[str, Prediction], key: Callable[[Sample], str | None], threshold: float = 0.5
+) -> dict[str, dict[str, Any]]:
     groups: dict[str, list[Sample]] = defaultdict(list)
     for s in samples:
         k = key(s)
@@ -110,10 +126,14 @@ def _pct(xs: list[float], q: float) -> float:
     return xs[max(0, min(len(xs) - 1, math.ceil(q / 100 * len(xs)) - 1))]
 
 
-def latency_stats(samples: Sequence[Sample], preds: dict[str, Prediction]) -> dict:
-    xs = [preds[s.sample_id].latency_ms for s in samples
-          if s.sample_id in preds and preds[s.sample_id].error is None]
+def latency_stats(samples: Sequence[Sample], preds: dict[str, Prediction]) -> dict[str, float]:
+    xs = [preds[s.sample_id].latency_ms for s in samples if s.sample_id in preds and preds[s.sample_id].error is None]
     if not xs:
         return {}
-    return dict(mean_ms=sum(xs) / len(xs), p50_ms=_pct(xs, 50), p95_ms=_pct(xs, 95),
-                p99_ms=_pct(xs, 99), images_per_s=1000 / (sum(xs) / len(xs)))
+    return {
+        "mean_ms": sum(xs) / len(xs),
+        "p50_ms": _pct(xs, 50),
+        "p95_ms": _pct(xs, 95),
+        "p99_ms": _pct(xs, 99),
+        "images_per_s": 1000 / (sum(xs) / len(xs)),
+    }

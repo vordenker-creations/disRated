@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+
 import numpy as np
 
 from .data.vhd11k import load_vhd11k
@@ -58,17 +59,19 @@ def main() -> None:
             auto_error_rate = auto_errors / auto_resolved if auto_resolved > 0 else 1.0
 
             if esc_rate <= a.max_escalation:
-                candidates.append({
-                    "tau_low": float(t_low),
-                    "tau_high": float(t_high),
-                    "esc_rate": float(esc_rate),
-                    "n_esc": n_esc,
-                    "n_safe": n_safe,
-                    "n_harm": n_harm,
-                    "fnr_safe": float(fnr_safe),
-                    "fpr_harm": float(fpr_harm),
-                    "auto_error_rate": float(auto_error_rate),
-                })
+                candidates.append(
+                    {
+                        "tau_low": float(t_low),
+                        "tau_high": float(t_high),
+                        "esc_rate": float(esc_rate),
+                        "n_esc": n_esc,
+                        "n_safe": n_safe,
+                        "n_harm": n_harm,
+                        "fnr_safe": float(fnr_safe),
+                        "fpr_harm": float(fpr_harm),
+                        "auto_error_rate": float(auto_error_rate),
+                    }
+                )
 
     if not candidates:
         raise SystemExit(f"No operating points found with escalation <= {a.max_escalation * 100:.1f}%.")
@@ -77,7 +80,9 @@ def main() -> None:
     candidates.sort(key=lambda x: (x["auto_error_rate"], -x["esc_rate"]))
 
     print(f"\n=== VALIDATION RISK-COVERAGE SWEEP (N={len(val_ids)}, Max Esc={a.max_escalation * 100:.1f}%) ===")
-    print(f"{'tau_low':>7} {'tau_high':>8} | {'Esc Rate':>8} {'Esc N':>6} | {'Auto Safe':>9} {'Safe FNR':>9} | {'Auto Harm':>9} {'Harm FPR':>9} | {'Auto Err':>9}")
+    print(
+        f"{'tau_low':>7} {'tau_high':>8} | {'Esc Rate':>8} {'Esc N':>6} | {'Auto Safe':>9} {'Safe FNR':>9} | {'Auto Harm':>9} {'Harm FPR':>9} | {'Auto Err':>9}"
+    )
     print("-" * 92)
 
     # Display top 10 operating points
@@ -91,9 +96,13 @@ def main() -> None:
         )
 
     best = candidates[0]
-    print(f"\nRecommended operating point:")
-    print(f"  tau_low  = {best['tau_low']:.3f} (resolves {best['n_safe']} safe, {best['fnr_safe'] * 100:.2f}% false negative rate)")
-    print(f"  tau_high = {best['tau_high']:.3f} (resolves {best['n_harm']} harmful, {best['fpr_harm'] * 100:.2f}% false positive rate)")
+    print("\nRecommended operating point:")
+    print(
+        f"  tau_low  = {best['tau_low']:.3f} (resolves {best['n_safe']} safe, {best['fnr_safe'] * 100:.2f}% false negative rate)"
+    )
+    print(
+        f"  tau_high = {best['tau_high']:.3f} (resolves {best['n_harm']} harmful, {best['fpr_harm'] * 100:.2f}% false positive rate)"
+    )
     print(f"  escalates {best['n_esc']} images ({best['esc_rate'] * 100:.1f}% traffic) to Tier 2")
 
 

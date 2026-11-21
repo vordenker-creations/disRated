@@ -4,11 +4,13 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 from PIL import Image
 
-from disrated.evalrun import build, main as evalrun_main
+from disrated.evalrun import build
+from disrated.evalrun import main as evalrun_main
 from disrated.metrics.scoring import read_predictions
 from disrated.models.base import BaseModerator
 from disrated.models.d1_mlx import HARM_QUESTIONS, LiquidD1MLXModerator
@@ -18,7 +20,7 @@ from disrated.score import main as score_main
 class _FakeD1Model:
     def __init__(self, probs: list[float]):
         self._probs = list(probs)
-        self.calls: list[dict] = []
+        self.calls: list[dict[str, Any]] = []
 
     def system_one(self, *, state, questions, media):
         assert state is None
@@ -50,6 +52,7 @@ def test_d1_mlx_contract_and_numpy_or_pil_ingest(monkeypatch):
     assert mod.name == "d1-2b-mlx"
     cfg = mod.config()
     assert cfg["model_id"] == "LiquidAI/d1-2B-MLX-fp16"
+    assert cfg["revision"] == "f4e6e118bf850880e6f45a5b22085057778ac243"
     assert cfg["questions"] == HARM_QUESTIONS
 
     pil_in = Image.new("RGB", (8, 8), (10, 20, 30))
@@ -84,14 +87,22 @@ def test_evalrun_build_and_score_d1_mlx(monkeypatch, tmp_path: Path):
     splits_file.write_text(json.dumps({"train": [], "val": val_ids, "test": []}), encoding="utf-8")
 
     out_file = tmp_path / "d1-val.jsonl"
-    evalrun_main([
-        "--model", "d1-2b-mlx",
-        "--dataset", str(ds_dir),
-        "--splits", str(splits_file),
-        "--split", "val",
-        "--batch-size", "1",
-        "--output", str(out_file),
-    ])
+    evalrun_main(
+        [
+            "--model",
+            "d1-2b-mlx",
+            "--dataset",
+            str(ds_dir),
+            "--splits",
+            str(splits_file),
+            "--split",
+            "val",
+            "--batch-size",
+            "1",
+            "--output",
+            str(out_file),
+        ]
+    )
 
     preds = read_predictions(out_file)
     assert list(preds.keys()) == val_ids
@@ -99,13 +110,19 @@ def test_evalrun_build_and_score_d1_mlx(monkeypatch, tmp_path: Path):
     assert preds[val_ids[1]].score == 0.25
 
     report_file = tmp_path / "report.json"
-    score_main([
-        str(out_file),
-        "--dataset", str(ds_dir),
-        "--splits", str(splits_file),
-        "--split", "val",
-        "--json", str(report_file),
-    ])
+    score_main(
+        [
+            str(out_file),
+            "--dataset",
+            str(ds_dir),
+            "--splits",
+            str(splits_file),
+            "--split",
+            "val",
+            "--json",
+            str(report_file),
+        ]
+    )
     report = json.loads(report_file.read_text(encoding="utf-8"))
     assert report["overall"]["accuracy"] == 1.0
     assert report["overall"]["refused"] == 0

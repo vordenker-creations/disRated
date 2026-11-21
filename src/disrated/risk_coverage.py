@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+
 import numpy as np
 
 from .data.vhd11k import load_vhd11k
@@ -31,7 +32,9 @@ def compute_metrics(z: np.ndarray, y: np.ndarray, c: float) -> dict[str, float]:
     }
 
 
-def boot_ci(z: np.ndarray, y: np.ndarray, c: float, n_boot: int = 2000, seed: int = 0) -> dict[str, tuple[float, float]]:
+def boot_ci(
+    z: np.ndarray, y: np.ndarray, c: float, n_boot: int = 2000, seed: int = 0
+) -> dict[str, tuple[float, float]]:
     rng = np.random.default_rng(seed)
     n = len(y)
     res_accs, band_accs = [], []
@@ -71,9 +74,7 @@ def main(argv: list[str] | None = None) -> None:
         preds = read_predictions(pred_path.expanduser())
         logged_hashes = {p.extra["splits_sha256"] for p in preds.values() if "splits_sha256" in p.extra}
         if logged_hashes and logged_hashes != {expected_hash}:
-            raise SystemExit(
-                f"ERROR: Splits hash mismatch in {pred_path}: {logged_hashes} != {expected_hash}"
-            )
+            raise SystemExit(f"ERROR: Splits hash mismatch in {pred_path}: {logged_hashes} != {expected_hash}")
         s = np.array([preds[i].score for i in sp[split]])
         y = np.array([by_id[i].harmful for i in sp[split]])
         return s, y
@@ -121,7 +122,9 @@ def main(argv: list[str] | None = None) -> None:
                         best = (esc, tl, th)
         print(
             f"target {target:.2f}:",
-            "none feasible" if best is None else f"escalation {best[0]:.3f} at tau_low={best[1]:.2f}, tau_high={best[2]:.2f} (<=0.30 feasible: {best[0] <= 0.30})",
+            "none feasible"
+            if best is None
+            else f"escalation {best[0]:.3f} at tau_low={best[1]:.2f}, tau_high={best[2]:.2f} (<=0.30 feasible: {best[0] <= 0.30})",
         )
 
 

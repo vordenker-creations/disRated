@@ -16,6 +16,9 @@ Core Commands:
   eval-test                 Run Phase 4 held-out test evaluation from a locked validation gate
   probe                     Train and evaluate Tier 0 linear probe on cached embeddings
   embed                     Extract and cache vision embeddings for dataset images
+  finetune                  Fine-tune ResNet-50 / ConvNeXt-T / ViT-B/16 / CLIP ViT-B/16 baselines (RQ2)
+  summarize                 Multi-seed test AUC/accuracy with bootstrap CIs and paired comparisons
+  zeroshot                  Zero-shot CLIP baseline from cached embeddings, prompt set chosen on val (RQ1)
 
 Analysis & Audits:
   risk-coverage             Evaluate one-knob risk-coverage tradeoff with bootstrap CIs
@@ -68,6 +71,18 @@ def main(argv: list[str] | None = None) -> None:
         sub_main(cmd_args)
     elif cmd == "embed":
         from .embed import main as sub_main
+
+        sub_main(cmd_args)
+    elif cmd == "finetune":
+        from .finetune import main as sub_main
+
+        sub_main()
+    elif cmd == "summarize":
+        from .summarize import main as sub_main
+
+        sub_main()
+    elif cmd == "zeroshot":
+        from .zeroshot import main as sub_main
 
         sub_main(cmd_args)
     elif cmd in ("risk-coverage", "risk_coverage"):

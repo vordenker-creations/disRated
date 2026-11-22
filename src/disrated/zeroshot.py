@@ -113,16 +113,31 @@ def encode_texts(model_id: str, revision: str | None, prompts: Sequence[str]) ->
     return feats.float().cpu().numpy(), scale
 
 
-def load_embeddings(path: Path) -> tuple[dict[str, int], np.ndarray, np.ndarray, str, str | None]:
+def load_embeddings(
+    path: Path, model_override: str | None = None, revision_override: str | None = None
+) -> tuple[dict[str, int], np.ndarray, np.ndarray, str, str | None, str]:
+    """Returns (index, feats, ms, model_id, revision, provenance).
+
+    Caches written by `disrated embed` >= 0.1.2 carry model_id/revision. Older caches do not; for those
+    the caller must name the model with `--model`, and provenance is recorded as "declared" rather than
+    "cache" so the result file shows the text encoder was matched by hand.
+    """
     z = np.load(path, allow_pickle=False)
     ids = [str(i) for i in z["ids"]]
     if len(set(ids)) != len(ids):
         raise SystemExit(f"ERROR: duplicate ids in {path}")
-    if "model_id" not in z.files:
-        raise SystemExit(f"ERROR: {path} has no model_id; re-run `disrated embed` so the text encoder can be matched.")
-    model_id = str(z["model_id"])
-    revision = str(z["revision"]) if "revision" in z.files and str(z["revision"]) else None
-    return {sid: i for i, sid in enumerate(ids)}, z["feats"], z["ms"], model_id, revision
+    cached_model = str(z["model_id"]) if "model_id" in z.files else None
+    cached_rev = str(z["revision"]) if "revision" in z.files and str(z["revision"]) else None
+    if cached_model is not None:
+        if model_override is not None and model_override != cached_model:
+            raise SystemExit(f"ERROR: --model {model_override!r} does not match the cache's model_id {cached_model!r}")
+        return {sid: i for i, sid in enumerate(ids)}, z["feats"], z["ms"], cached_model, cached_rev, "cache"
+    if model_override is None:
+        raise SystemExit(
+            f"ERROR: {path} has no model_id (written by an older `disrated embed`). "
+            "Pass --model with the checkpoint that produced it, e.g. --model openai/clip-vit-base-patch16."
+        )
+    return {sid: i for i, sid in enumerate(ids)}, z["feats"], z["ms"], model_override, revision_override, "declared"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -131,6 +146,12 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--dataset", type=Path, required=True)
     ap.add_argument("--splits", type=Path, default=Path("splits.v2.json"))
     ap.add_argument("--name", default="clip-b16-zeroshot", help="output stem: results/<name>-<split>.jsonl")
+    ap.add_argument("--model", default=None, help="checkpoint of an older cache that lacks model_id")
+    ap.add_argument(
+        "--revision",
+        default=None,
+        help="HuggingFace commit for --model (defaults to the pinned SHA in `disrated embed` for known models)",
+    )
     ap.add_argument(
         "--write-splits",
         default="val,test",
@@ -144,7 +165,14 @@ def main(argv: list[str] | None = None) -> None:
 
     samples, _ = load_vhd11k(a.dataset.expanduser())
     by_id = {s.sample_id: s for s in samples}
-    index, feats, ms, model_id, revision = load_embeddings(a.embeddings.expanduser())
+    revision_override = a.revision
+    if a.model is not None and revision_override is None:
+        from .embed import PINNED_REVISIONS
+
+        revision_override = PINNED_REVISIONS.get(a.model)
+    index, feats, ms, model_id, revision, provenance = load_embeddings(
+        a.embeddings.expanduser(), a.model, revision_override
+    )
 
     def rows(split: str) -> list[str]:
         ids = sorted(by_id) if split == "all" else list(splits[split])
@@ -171,7 +199,7 @@ def main(argv: list[str] | None = None) -> None:
         class_vecs[set_name] = (class_vector(harm), class_vector(safe))
         val_aucs[set_name] = auc(y_val, zeroshot_scores(x_val, *class_vecs[set_name], scale))
     chosen = select_prompt_set(val_aucs)
-    print(f"model={model_id} revision={revision or 'unpinned'} scale={scale:.2f}")
+    print(f"model={model_id} revision={revision or 'unpinned'} ({provenance}) scale={scale:.2f}")
     print("val AUC by prompt set:", {k: round(v, 4) for k, v in val_aucs.items()}, "-> chosen:", chosen)
 
     # 2) Write only the chosen set for the requested splits.
@@ -191,6 +219,7 @@ def main(argv: list[str] | None = None) -> None:
                 "moderator": a.name,
                 "config": {
                     "model_id": model_id,
+                    "model_provenance": provenance,
                     "revision": revision,
                     "embeddings": str(a.embeddings),
                     "prompt_sets": PROMPT_SETS,

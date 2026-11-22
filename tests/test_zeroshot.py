@@ -79,6 +79,30 @@ def test_main_end_to_end_with_fake_encoder(tmp_path, monkeypatch):
         assert meta["run"] == {"split": split, "splits_sha256": sha}
 
 
+def test_load_embeddings_requires_model_for_legacy_cache_and_rejects_mismatch(tmp_path):
+    from disrated.zeroshot import load_embeddings
+
+    legacy = tmp_path / "legacy.npz"
+    np.savez(legacy, ids=np.array(["a.png", "b.png"]), feats=np.eye(2), ms=np.ones(2, dtype=np.float32))
+    with pytest.raises(SystemExit, match="--model"):
+        load_embeddings(legacy)
+    *_, model_id, revision, provenance = load_embeddings(legacy, "openai/clip-vit-base-patch16", "sha1")
+    assert (model_id, revision, provenance) == ("openai/clip-vit-base-patch16", "sha1", "declared")
+
+    modern = tmp_path / "modern.npz"
+    np.savez(
+        modern,
+        ids=np.array(["a.png"]),
+        feats=np.eye(1),
+        ms=np.ones(1, dtype=np.float32),
+        model_id=np.array("openai/clip-vit-base-patch16"),
+        revision=np.array("sha2"),
+    )
+    assert load_embeddings(modern)[3:] == ("openai/clip-vit-base-patch16", "sha2", "cache")
+    with pytest.raises(SystemExit, match="does not match"):
+        load_embeddings(modern, "openai/clip-vit-large-patch14")
+
+
 def test_prompt_sets_are_well_formed():
     for ps in PROMPT_SETS.values():
         assert ps["harmful"] and ps["safe"]

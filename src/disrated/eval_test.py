@@ -155,6 +155,11 @@ def evaluate_locked_test(
     probe_m = binary_metrics(y_true.tolist(), pred_probe.tolist())
     vlm_m = binary_metrics(y_true.tolist(), pred_vlm_standalone.tolist())
     cas_m = binary_metrics(y_true.tolist(), pred_cascade.tolist())
+    union_oracle_all = float(((pred_probe == y_true) | (pred_vlm_standalone == y_true)).mean())
+    probe_acc = float(probe_m["accuracy"]) if probe_m["accuracy"] is not None else float("nan")
+    cas_acc = float(cas_m["accuracy"]) if cas_m["accuracy"] is not None else float("nan")
+    oracle_headroom = union_oracle_all - probe_acc
+    oracle_gap_captured = float((cas_acc - probe_acc) / oracle_headroom) if oracle_headroom > 0.0 else float("nan")
 
     res_out: dict[str, Any] = {
         "n_test": int(n),
@@ -168,7 +173,8 @@ def evaluate_locked_test(
         "vlm_refusal_rate": float(refused.mean()) if n else 0.0,
         "resolved_probe_acc": float((pred_probe[res] == y_true[res]).mean()) if res.any() else float("nan"),
         "resolved_vlm_acc": float((pred_vlm_standalone[res] == y_true[res]).mean()) if res.any() else float("nan"),
-        "union_oracle_all": float(((pred_probe == y_true) | (pred_vlm_standalone == y_true)).mean()),
+        "union_oracle_all": union_oracle_all,
+        "oracle_gap_captured_acc": oracle_gap_captured,
         "union_oracle_in_band": (
             float(((pred_probe[band] == y_true[band]) | (pred_vlm_standalone[band] == y_true[band])).mean())
             if band.any()
@@ -224,7 +230,8 @@ def _print_test_report(title: str, ev: dict[str, Any], gate_passed: bool) -> Non
     print(
         f"In-band acc (n={prim['in_band']['n']}): VLM={prim['in_band']['acc_a']:.3f} vs Probe={prim['in_band']['acc_b']:.3f} "
         f"(diff={prim['in_band']['diff']:+.3f} [{prim['in_band']['diff_ci95'][0]:+.3f}, {prim['in_band']['diff_ci95'][1]:+.3f}]) | "
-        f"Out-of-band VLM={ev['resolved_vlm_acc']:.3f}, Probe={ev['resolved_probe_acc']:.3f}"
+        f"Out-of-band VLM={ev['resolved_vlm_acc']:.3f}, Probe={ev['resolved_probe_acc']:.3f} | "
+        f"UnionOracle={ev['union_oracle_all']:.3f} (captured={ev['oracle_gap_captured_acc']:.1%})"
     )
     print("Pass / Falsification Criteria (HYPOTHESIS.md §5):")
     for key in (
@@ -325,10 +332,19 @@ def main(argv: list[str] | None = None) -> None:
     locked_ev = evaluate_locked_test(c_star=c_star, z_vlm_cut=z_cut_star, **common_kw)
     uncal_ev = evaluate_locked_test(c_star=c_star, z_vlm_cut=0.0, **common_kw)
 
+    # Original pre-amendment rule reference: smallest k meeting non-inferiority on uncalibrated val (k=0.05).
+    orig_ev: dict[str, Any] | None = None
+    uncal_cands = gate.get("evaluations", {}).get("uncalibrated", {}).get("candidates", [])
+    orig_cand = next((c for c in uncal_cands if abs(float(c["k"]) - 0.05) < 1e-9), None)
+    if orig_cand is not None:
+        orig_ev = evaluate_locked_test(c_star=float(orig_cand["c_k"]), z_vlm_cut=0.0, **common_kw)
+
     gate_passed = bool(op.get("gate_passed", False))
     _print_test_report(f"locked:{op['tau_mode']}", locked_ev, gate_passed=gate_passed)
     if op["tau_mode"] != "uncalibrated":
-        _print_test_report("uncalibrated-reference", uncal_ev, gate_passed=gate_passed)
+        _print_test_report("uncalibrated-at-locked-c*", uncal_ev, gate_passed=gate_passed)
+    if orig_ev is not None:
+        _print_test_report("original-rule:k=0.05,uncalibrated", orig_ev, gate_passed=gate_passed)
 
     payload = {
         "gate_path": str(a.gate),
@@ -351,6 +367,7 @@ def main(argv: list[str] | None = None) -> None:
         "hypothesis_passed": bool(gate_passed and locked_ev["primary"]["criteria"]["all_passed"]),
         "locked_evaluation": locked_ev,
         "uncalibrated_evaluation": uncal_ev,
+        "original_rule_evaluation": orig_ev,
     }
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

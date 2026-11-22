@@ -15,14 +15,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         prog="python -m disrated.summarize",
         description="Test AUC / accuracy with 95%% bootstrap CIs. Each run is NAME=file1,file2,... "
-                    "(one file per seed); seeds are averaged inside every bootstrap resample.",
+        "(one file per seed); seeds are averaged inside every bootstrap resample.",
     )
     ap.add_argument("runs", nargs="+", help="NAME=pred1.jsonl,pred2.jsonl,...")
     ap.add_argument("--dataset", type=Path, required=True)
     ap.add_argument("--splits", type=Path, required=True)
     ap.add_argument("--ref", help="NAME of a run to compare every other run against (paired)")
-    ap.add_argument("--split", default="test", choices=["test", "all"],
-                    help="'all' = all 10,000 images; use it with the *-oof.jsonl files")
+    ap.add_argument(
+        "--split",
+        default="test",
+        choices=["test", "all"],
+        help="'all' = all 10,000 images; use it with the *-oof.jsonl files",
+    )
     ap.add_argument("--boot", type=int, default=2000)
     ap.add_argument("--threshold", type=float, default=0.5)
     a = ap.parse_args()
@@ -69,10 +73,16 @@ def main() -> None:
         lo_a, hi_a = np.percentile(boot[n][:, 0], [2.5, 97.5])
         lo_c, hi_c = np.percentile(boot[n][:, 1], [2.5, 97.5])
         sd = np.std([roc_auc_score(y, s) for s in S], ddof=1) if len(S) > 1 else float("nan")
-        print(f"{n:<16}{len(S):>6}  {auc:>7.3f} [{lo_a:.3f}, {hi_a:.3f}]  {sd:>8.3f}   "
-              f"{acc:>6.3f} [{lo_c:.3f}, {hi_c:.3f}]")
+        print(
+            f"{n:<16}{len(S):>6}  {auc:>7.3f} [{lo_a:.3f}, {hi_a:.3f}]  {sd:>8.3f}   "
+            f"{acc:>6.3f} [{lo_c:.3f}, {hi_c:.3f}]"
+        )
 
     if a.ref:
+
+        def flag(lo: float, hi: float) -> str:
+            return "clear" if lo > 0 or hi < 0 else "unclear"
+
         print(f"\npaired difference vs {a.ref} (run - ref); CI excluding 0 = clear difference")
         for n in runs:
             if n == a.ref:
@@ -80,9 +90,10 @@ def main() -> None:
             d = boot[n] - boot[a.ref]
             (la, ha), (lc, hc) = np.percentile(d[:, 0], [2.5, 97.5]), np.percentile(d[:, 1], [2.5, 97.5])
             ma, mc = d[:, 0].mean(), d[:, 1].mean()
-            flag = lambda lo, hi: "clear" if lo > 0 or hi < 0 else "unclear"
-            print(f"{n:<16} dAUC {ma:+.3f} [{la:+.3f}, {ha:+.3f}] {flag(la, ha):<8}"
-                  f" dAcc {mc:+.3f} [{lc:+.3f}, {hc:+.3f}] {flag(lc, hc)}")
+            print(
+                f"{n:<16} dAUC {ma:+.3f} [{la:+.3f}, {ha:+.3f}] {flag(la, ha):<8}"
+                f" dAcc {mc:+.3f} [{lc:+.3f}, {hc:+.3f}] {flag(lc, hc)}"
+            )
 
 
 if __name__ == "__main__":

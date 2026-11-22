@@ -165,8 +165,11 @@ def test_val_gate_to_eval_test_end_to_end(tmp_path: Path):
     assert res["locked_evaluation"]["primary"]["criteria"]["all_passed"] is True
     assert res["locked_evaluation"]["by_taxonomy"]["concrete_harm"]["n"] == 60
     assert res["locked_evaluation"]["by_taxonomy"]["contextual_normative"]["n"] == 60
-    # Uncalibrated evaluation is also logged transparently
+    # Uncalibrated and original-rule (k=0.05) evaluations + oracle-gap metric are logged transparently
     assert res["uncalibrated_evaluation"]["z_vlm_cut"] == 0.0
+    assert res["original_rule_evaluation"] is not None
+    assert res["original_rule_evaluation"]["z_vlm_cut"] == 0.0
+    assert 0.0 < res["locked_evaluation"]["oracle_gap_captured_acc"] <= 1.0
 
     # Verify tampering with gate splits_sha256 is rejected
     bad_gate = tmp_path / "bad_gate.json"

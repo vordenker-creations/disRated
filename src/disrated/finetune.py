@@ -7,6 +7,7 @@ import json
 import random
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -49,10 +50,12 @@ def build(arch: str) -> nn.Module:
         m.fc = nn.Linear(m.fc.in_features, 1)
     elif arch == "convnext_tiny":
         m = models.convnext_tiny(weights=models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1)
-        m.classifier[2] = nn.Linear(m.classifier[2].in_features, 1)
+        head = cast(nn.Linear, m.classifier[2])
+        m.classifier[2] = nn.Linear(head.in_features, 1)
     elif arch == "vit_b_16":
         m = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)
-        m.heads.head = nn.Linear(m.heads.head.in_features, 1)
+        head = cast(nn.Linear, m.heads.head)
+        m.heads.head = nn.Linear(head.in_features, 1)
     else:
         raise SystemExit(f"unknown --arch {arch!r}; choose from {sorted(DEFAULT_LR)}")
     return m
@@ -102,10 +105,10 @@ def predict(model: nn.Module, loader: DataLoader, dev: str):
     return np.concatenate(ys), np.concatenate(ps), np.concatenate(ms)
 
 
-def write(path: Path, samples: list[Sample], scores, ms, extra: dict) -> None:
+def write(path: Path, samples: list[Sample], scores, ms, extra: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
-        for s, sc, t in zip(samples, scores, ms):
+        for s, sc, t in zip(samples, scores, ms, strict=True):
             p = Prediction(
                 sample_id=s.sample_id,
                 score=min(max(float(sc), 0.0), 1.0),
@@ -152,23 +155,29 @@ def main() -> None:
     print(f"device={dev} arch={a.arch} lr={lr} | train={len(tr)} val={len(va)} test={len(te)}")
 
     mean, std = (CLIP_MEAN, CLIP_STD) if a.arch == "clip_vit_b16" else (MEAN, STD)
-    tf_train = T.Compose([
-        T.RandomResizedCrop(224, scale=(0.5, 1.0)),
-        T.RandomHorizontalFlip(),
-        T.ColorJitter(0.2, 0.2, 0.2),
-        T.ToTensor(),
-        T.Normalize(mean, std),
-    ])
+    tf_train = T.Compose(
+        [
+            T.RandomResizedCrop(224, scale=(0.5, 1.0)),
+            T.RandomHorizontalFlip(),
+            T.ColorJitter(0.2, 0.2, 0.2),
+            T.ToTensor(),
+            T.Normalize(mean, std),
+        ]
+    )
     tf_eval = T.Compose([T.Resize((224, 224)), T.ToTensor(), T.Normalize(mean, std)])
 
     g = torch.Generator().manual_seed(a.seed)
-    kw = dict(num_workers=a.workers, pin_memory=dev == "cuda", persistent_workers=a.workers > 0)
+    kw: dict[str, Any] = {
+        "num_workers": a.workers,
+        "pin_memory": dev == "cuda",
+        "persistent_workers": a.workers > 0,
+    }
     dl_tr = DataLoader(Images(tr, tf_train), batch_size=a.batch_size, shuffle=True, drop_last=True, generator=g, **kw)
     dl_va = DataLoader(Images(va, tf_eval), batch_size=64, shuffle=False, **kw)
     dl_te = DataLoader(Images(te, tf_eval), batch_size=64, shuffle=False, **kw)
 
     model = build(a.arch).to(dev)
-    if a.arch == "clip_vit_b16":
+    if isinstance(model, ClipClassifier):
         groups = [
             {"params": model.vision.parameters(), "lr": lr},
             {"params": model.head.parameters(), "lr": a.head_lr},
@@ -199,7 +208,9 @@ def main() -> None:
         yv, pv, _ = predict(model, dl_va, dev)
         v_auc = float(roc_auc_score(yv, pv)) if len(set(yv.tolist())) == 2 else float("nan")
         v_acc = float(((pv >= 0.5) == (yv == 1)).mean())
-        print(f"epoch {epoch + 1:>2}/{a.epochs} | loss {tot / n:.4f} | val AUC {v_auc:.4f} acc {v_acc:.4f} | {time.time() - t0:.0f}s")
+        print(
+            f"epoch {epoch + 1:>2}/{a.epochs} | loss {tot / n:.4f} | val AUC {v_auc:.4f} acc {v_acc:.4f} | {time.time() - t0:.0f}s"
+        )
         if v_auc > best_auc:
             best_auc, best_epoch, stale = v_auc, epoch + 1, 0
             best_state = copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()})
@@ -210,6 +221,8 @@ def main() -> None:
                 break
 
     # Model selection used val only; test is touched once, here.
+    if best_state is None:
+        raise RuntimeError("Training completed without recording a valid checkpoint.")
     model.load_state_dict(best_state)
     meta = {"splits_sha256": splits_sha256, "arch": a.arch, "epoch": best_epoch, "lr": lr, "seed": a.seed}
     out = Path("results")
@@ -222,8 +235,10 @@ def main() -> None:
     t_auc = float(roc_auc_score(yt, pt)) if len(set(yt.tolist())) == 2 else float("nan")
     t_acc = float(((pt >= 0.5) == (yt == 1)).mean())
     print(f"best epoch {best_epoch} (val AUC {best_auc:.4f}) | TEST AUC {t_auc:.4f} acc {t_acc:.4f}")
-    print(f"score with: uv run python -m disrated.score results/{a.name}-test.jsonl "
-          f"--dataset {a.dataset} --splits {a.splits} --split test")
+    print(
+        f"score with: uv run python -m disrated.score results/{a.name}-test.jsonl "
+        f"--dataset {a.dataset} --splits {a.splits} --split test"
+    )
 
 
 if __name__ == "__main__":

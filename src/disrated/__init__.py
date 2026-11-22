@@ -18,6 +18,7 @@ Core Commands:
   embed                     Extract and cache vision embeddings for dataset images
   finetune                  Fine-tune ResNet-50 / ConvNeXt-T / ViT-B/16 / CLIP ViT-B/16 baselines (RQ2)
   summarize                 Multi-seed test AUC/accuracy with bootstrap CIs and paired comparisons
+  zeroshot                  Zero-shot CLIP baseline from cached embeddings, prompt set chosen on val (RQ1)
 
 Analysis & Audits:
   risk-coverage             Evaluate one-knob risk-coverage tradeoff with bootstrap CIs
@@ -80,6 +81,10 @@ def main(argv: list[str] | None = None) -> None:
         from .summarize import main as sub_main
 
         sub_main()
+    elif cmd == "zeroshot":
+        from .zeroshot import main as sub_main
+
+        sub_main(cmd_args)
     elif cmd in ("risk-coverage", "risk_coverage"):
         from .risk_coverage import main as sub_main
 

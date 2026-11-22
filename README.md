@@ -107,6 +107,16 @@ uv run disrated probe \
   --name clip-b16-v2
 ```
 
+Zero-shot CLIP baseline (no training) from the same cache; the prompt set is chosen on `val` by ROC-AUC before `test` is written:
+
+```bash
+uv run disrated zeroshot \
+  --embeddings embeddings/openai_clip-vit-base-patch16.npz \
+  --dataset /path/to/dataset_10000_1000 \
+  --splits splits.v2.json \
+  --name clip-b16-zeroshot
+```
+
 ### 4. Risk–Coverage, Tier 2 Validation Gate & Routing Analysis
 
 Evaluate single-knob logit uncertainty routing (`|logit(p)| < c`) and run the Phase 3 validation gate (`val` only):
@@ -219,7 +229,8 @@ disrated/
 │       ├── score.py                 # CLI entrypoint for scoring and provenance checks
 │       ├── summarize.py             # Multi-seed bootstrap CIs & paired run comparisons
 │       ├── sweep_thresholds.py      # Two-knob asymmetric threshold grid search
-│       └── val_gate.py              # Phase 3 Platt calibration & validation gate lock
+│       ├── val_gate.py              # Phase 3 Platt calibration & validation gate lock
+│       └── zeroshot.py              # Zero-shot CLIP baseline from cached embeddings (RQ1)
 └── tests/
     ├── test_cli.py                  # Top-level CLI dispatch & help/version tests
     ├── test_d1_mlx.py               # d1-2B MLX adapter & blind-pixel contract tests
@@ -230,6 +241,7 @@ disrated/
     ├── test_rebuild_splits.py       # Cache ID alignment & shuffled-cache invariance tests
     ├── test_runner.py               # Crash recovery, config/split lock, pixel-strip tests
     ├── test_val_gate.py             # Cluster bootstrap, MC random-control & Platt tests
+    ├── test_zeroshot.py             # Zero-shot scoring, prompt ensembling & val-only selection tests
     └── test_vhd11k.py               # Filename regex, taxonomy & split disjointness tests
 ```
 

@@ -3,6 +3,8 @@ name = "disrated"
 version = "0.1.2"
 description = "Evaluation harness and selective-classification benchmark for VHD11K visual harm moderation."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [
     { name = "Nguyễn Hoàng Thiên Bảo", email = "vordenker.org@gmail.com" },

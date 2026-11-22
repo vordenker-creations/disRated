@@ -1,6 +1,6 @@
 # CLAUDE.md — `disRated` Engineering Guidelines
 
-This repository (`vordenker/disrated`) is first-party research software by **Nguyễn Hoàng Thiên Bảo** (`vor` / `vordenker`) and **Nguyễn Thị Thúy Vân** (`nttvan`) for the VKU Faculty of AI & Data Science thesis *"Nghiên cứu xây dựng mô hình phân loại hình ảnh độc hại"*.
+This repository (`vordenker-creations/disRated`) is first-party research software by **Nguyễn Hoàng Thiên Bảo** (`vor` / `vordenker`) and **Nguyễn Thị Thúy Vân** (`nttvan`) for the VKU Faculty of AI & Data Science thesis *"Nghiên cứu xây dựng mô hình phân loại hình ảnh độc hại"*.
 
 All code changes, adapters, scripts, and evaluation runs must strictly obey the four locked methodological invariants defined in [`HYPOTHESIS.md`](HYPOTHESIS.md):
 

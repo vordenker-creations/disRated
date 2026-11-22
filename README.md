@@ -44,8 +44,8 @@ pip install disrated
 For local development and full benchmark reproduction using [`uv`](https://github.com/astral-sh/uv):
 
 ```bash
-git clone https://github.com/vordenker/disrated.git
-cd disrated
+git clone https://github.com/vordenker-creations/disRated.git
+cd disRated
 uv sync                 # core harness (CPU / MPS / CUDA CLIP probes & scoring)
 uv sync --extra mac     # Apple Silicon MLX Tier 2 VLM (d1-2b-mlx)
 uv sync --extra cuda    # Linux CUDA FP8 Tier 2 VLM (qwen3-vl-8b-fp8)

@@ -9,7 +9,8 @@ wheels/
 # Virtual environments & local artifacts
 .venv
 results/
-embeddings/
+embeddings/*
+!embeddings/components.json
 
 # OS & editor files
 .DS_Store

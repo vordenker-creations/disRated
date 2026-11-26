@@ -31,8 +31,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/vordenker-creations/disRated"
-Issues = "https://github.com/vordenker-creations/disRated/issues"
+Repository = "https://github.com/vordenker-work/disRated"
+Issues = "https://github.com/vordenker-work/disRated/issues"
 
 [project.scripts]
 disrated = "disrated:main"

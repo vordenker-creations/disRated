@@ -10,6 +10,7 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 from disrated.label import (
+    _HTML_PAGE,
     LabelRecord,
     _render_clean_jpeg_bytes,
     build_split_manifest,
@@ -145,3 +146,10 @@ def test_label_prepare_blocks_sealed_test_and_scores_blind_audit(tmp_path: Path)
     assert report["inter_rater"]["vor_vs_van"]["agreement"] == pytest.approx(11 / 12)
     assert report["model_vs_human_and_judge"]["vhd11k_judge"]["acc_vs_human"] == pytest.approx(9 / 11)
     assert report["model_vs_human_and_judge"]["probe"]["acc_vs_human"] == pytest.approx(9 / 11)
+
+
+def test_blind_ui_has_bilingual_criteria_and_no_s_skip_hotkey():
+    assert "Labeling Criteria" in _HTML_PAGE
+    assert "Tiêu chí gán nhãn" in _HTML_PAGE
+    assert "garbled AI images" in _HTML_PAGE
+    assert 'k === "s"' not in _HTML_PAGE
